@@ -17,12 +17,12 @@ function cn(...inputs: ClassValue[]) {
 const EXAMPLES = [
   {
     title: "Sales Report",
-    dataset: "Table: sales\nColumns: order_id, customer_id, product_id, quantity, unit_price, order_date\n\nTable: products\nColumns: product_id, product_name, category",
+    dataset: "sales(order_id, customer_id, product_id, quantity, price, date)\nproducts(product_id, name, category)",
     request: "Total revenue and number of orders per product category in 2023, sorted by revenue descending."
   },
   {
     title: "Customer Retention",
-    dataset: "Table: users\nColumns: user_id, email, signup_date, last_login_date\n\nTable: subscriptions\nColumns: subscription_id, user_id, plan_type, status, start_date",
+    dataset: "users(user_id, email, signup_date, last_login_date)\nsubscriptions(subscription_id, user_id, plan_type, status, start_date)",
     request: "List the email and plan type of users who signed up before 2023 but have not logged in since January 2024."
   }
 ];
@@ -134,11 +134,11 @@ const GuideModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   <h3 className="font-bold text-sm">1. Define Schema</h3>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Start by describing your tables and columns. Clearly list table names and the fields they contain.
+                  Start by pasting your actual DDL, or describing your tables using a simpler format like table(col1, col2).
                 </p>
                 <div className="p-3 bg-slate-50 rounded-lg font-mono text-[10px] text-slate-500 border border-slate-100 italic">
-                  Table: orders<br/>
-                  Columns: id, user_id, amount
+                  orders(id, user_id, amount)<br/>
+                  users(id, name, email)
                 </div>
               </div>
 
@@ -208,10 +208,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'schema' | 'request'>('schema');
 
   const handleGenerate = async () => {
-    if (!dataset.trim() || !request.trim()) {
-      setError("Please provide both a dataset description and a request.");
+    if (!dataset.trim() && !request.trim()) {
+      setActiveTab('schema');
+      setError("Please provide a database schema and a user request.");
+      return;
+    }
+    if (!dataset.trim()) {
+      setActiveTab('schema');
+      setError("Please provide a database schema.");
+      return;
+    }
+    if (!request.trim()) {
+      setActiveTab('request');
+      setError("Please provide a user request (what you want to query).");
       return;
     }
 
@@ -222,7 +234,7 @@ export default function App() {
     try {
       const sqlResult = await generateSQL(dataset, request, dialect);
       if (sqlResult.startsWith("ERROR:")) {
-        setError(sqlResult.replace("ERROR:", "").trim());
+        setError(sqlResult.replace(/^ERROR:\s*/i, "").trim());
       } else {
         setResult(sqlResult);
       }
@@ -333,42 +345,90 @@ export default function App() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8 h-auto lg:h-full max-w-screen-2xl mx-auto w-full">
             {/* Input Section */}
             <div className="flex flex-col gap-6 sm:gap-8 overflow-hidden min-h-[500px] lg:min-h-0">
-              <div className="flex flex-col flex-1 min-h-[250px] lg:min-h-0">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <Database className="w-3.5 h-3.5 text-blue-500" />
-                    Dataset Description
-                  </label>
-                  <button 
-                    onClick={clearInputs}
-                    className="text-slate-400 hover:text-red-500 transition-colors"
-                    title="Clear inputs"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <textarea
-                  value={dataset}
-                  onChange={(e) => setDataset(e.target.value)}
-                  placeholder="Table: inventory\nColumns: item_id, warehouse_id, stock_count, last_restock"
-                  className="flex-1 w-full bg-white border border-slate-200 rounded-xl p-5 font-mono text-sm resize-none focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 shadow-sm transition-all placeholder:text-slate-300"
-                />
+              <div className="flex bg-slate-200/50 p-1 rounded-xl shrink-0">
+                <button 
+                  onClick={() => setActiveTab('schema')}
+                  className={cn("flex-1 py-2.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2", activeTab === 'schema' ? "bg-white shadow-sm text-blue-600" : "text-slate-500 hover:text-slate-700")}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Schema {dataset.trim() && <Check className="w-3.5 h-3.5 text-emerald-500"/>}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('request')}
+                  className={cn("flex-1 py-2.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2", activeTab === 'request' ? "bg-white shadow-sm text-blue-600" : "text-slate-500 hover:text-slate-700")}
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  Request {request.trim() && <Check className="w-3.5 h-3.5 text-emerald-500"/>}
+                </button>
               </div>
-              
-              <div className="flex flex-col h-48 shrink-0">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <Terminal className="w-3.5 h-3.5 text-blue-500" />
-                    User Request
-                  </label>
+
+              {activeTab === 'schema' ? (
+                <div className="flex flex-col flex-1 min-h-[250px] lg:min-h-0 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                        <Database className="w-3.5 h-3.5 text-blue-500" />
+                        Database Schema
+                      </label>
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium">Define your tables and columns for accurate querying</p>
+                    </div>
+                    <button 
+                      onClick={() => setDataset("")}
+                      className="text-slate-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                      title="Clear schema"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <textarea
+                    value={dataset}
+                    onChange={(e) => setDataset(e.target.value)}
+                    placeholder="Paste schema, DDL, or list tables (e.g., users: id, name, email)"
+                    className="flex-1 w-full bg-transparent p-5 font-mono text-[13px] leading-relaxed resize-none focus:outline-none focus:bg-blue-50/5 transition-all placeholder:text-slate-300"
+                  />
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 text-right">
+                    <button 
+                      onClick={() => setActiveTab('request')}
+                      className="text-[11px] font-bold text-blue-600 uppercase tracking-wider hover:text-blue-700"
+                    >
+                      Next: Add Request &rarr;
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  value={request}
-                  onChange={(e) => setRequest(e.target.value)}
-                  placeholder="e.g. Find the top 3 customers by total spend..."
-                  className="flex-1 w-full bg-white border border-slate-200 rounded-xl p-5 font-medium text-sm resize-none focus:outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 shadow-sm transition-all placeholder:text-slate-300"
-                />
-              </div>
+              ) : (
+                <div className="flex flex-col flex-1 min-h-[250px] lg:min-h-0 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                        <Terminal className="w-3.5 h-3.5 text-blue-500" />
+                        User Request
+                      </label>
+                      <p className="text-[10px] text-slate-500 mt-1 font-medium">What information are you trying to retrieve?</p>
+                    </div>
+                    <button 
+                      onClick={() => setRequest("")}
+                      className="text-slate-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                      title="Clear request"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <textarea
+                    value={request}
+                    onChange={(e) => setRequest(e.target.value)}
+                    placeholder="e.g. Find the top 3 customers by total spend..."
+                    className="flex-1 w-full bg-transparent p-5 font-medium text-[13px] leading-relaxed resize-none focus:outline-none focus:bg-blue-50/5 transition-all placeholder:text-slate-300"
+                  />
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 text-right">
+                    <button 
+                      onClick={() => setActiveTab('schema')}
+                      className="text-[11px] font-bold text-slate-500 uppercase tracking-wider hover:text-slate-700"
+                    >
+                      &larr; Back to Schema
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <button
                 disabled={isGenerating}
@@ -443,14 +503,16 @@ export default function App() {
                       key="error"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="h-full flex items-center justify-center text-center p-8"
+                      className="h-full flex items-center justify-center text-center p-4 sm:p-8 overflow-y-auto"
                     >
-                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-8 max-w-sm">
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 sm:p-8 max-w-sm w-full text-left self-center my-auto">
                         <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Trash2 className="w-5 h-5 text-red-500" />
+                          <HelpCircle className="w-5 h-5 text-red-500" />
                         </div>
-                        <p className="text-red-400 font-bold mb-2">Error Encountered</p>
-                        <p className="text-[11px] text-red-300/70 leading-relaxed font-mono">{error}</p>
+                        <p className="text-red-400 font-bold mb-4 text-center">We need a bit more info</p>
+                        <div className="text-[12px] text-red-200/90 leading-relaxed font-sans whitespace-pre-wrap">
+                          {error}
+                        </div>
                       </div>
                     </motion.div>
                   ) : result ? (
