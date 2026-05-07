@@ -1,42 +1,80 @@
-// By commenting out the GoogleGenAI initialization, we remove the API requirement.
-// import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function generateSQL(
   datasetDescription: string,
   userRequest: string,
   sqlDialect: string = "Standard SQL"
 ) {
-  // Simulate AI generation delay
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const model = "gemini-2.5-flash";
+  
+  const prompt = `
+You are an expert SQL developer and data analyst helping a beginner.
 
-  // Extract a table name from the prompt to make the mock slightly contextual
-  const tableMatch = datasetDescription.match(/([a-zA-Z0-9_]+)\s*\(/);
-  const mainTable = tableMatch ? tableMatch[1] : "target_table";
+Your task is to generate a correct, optimized SQL query based ONLY on the dataset description and the user's request.
+Ensure that the query generated matches exactly with the tables and columns provided by the user. 
+Do not hallucinate columns or tables that were not provided.
 
-  // Simple heuristic to guess an aggregate vs select (*)
-  const isAggregate = userRequest.toLowerCase().includes("total") || userRequest.toLowerCase().includes("count") || userRequest.toLowerCase().includes("sum");
+DATASET DESCRIPTION:
+${datasetDescription}
 
-  let mockQuery = "";
+USER REQUEST:
+${userRequest}
 
-  if (isAggregate) {
-    mockQuery = `SELECT 
-  category,
-  COUNT(*) AS total_count
-FROM ${mainTable}
-GROUP BY category
-ORDER BY total_count DESC
-LIMIT 10;`;
-  } else {
-    mockQuery = `SELECT *
-FROM ${mainTable}
-WHERE status = 'active'
-LIMIT 50;`;
-  }
+STRICT RULES:
+1. Use ONLY the tables and columns provided in the dataset description.
+2. DO NOT invent or assume any missing columns or tables.
+3. Use proper SQL syntax and best practices for ${sqlDialect}.
+4. Always alias aggregated columns clearly (e.g., SUM(revenue) AS total_revenue).
+5. Use GROUP BY when aggregation is required.
+6. Use JOINs correctly when multiple tables are involved.
+7. Apply filtering using WHERE when needed.
+8. Limit results when the user asks for "top", "first", etc.
+9. Ensure the query is readable and properly formatted.
 
-  return `-- [LOCAL MOCK MODE] API requirement has been removed.
--- Simulated ${sqlDialect} Query based on your request.
-
-${mockQuery}`;
+OUTPUT FORMAT:
+Return a JSON object with EXACTLY these properties:
+{
+  "sql": "The raw SQL query here. If there are missing fields or tables making it impossible, return an empty string.",
+  "error": "If the request CANNOT be fulfilled (e.g., missing data, unrelated question), explain why. Frame it in a friendly, beginner-friendly way with suggestions. If successful, set this to null.",
+  "explanation": "If successful, provide a beginner-friendly bulleted explanation of what the SQL clauses are doing. (e.g. • **SELECT**: We ask for the category name and count all items in each.)"
 }
+
+Respond ONLY with valid JSON. No markdown fences like \`\`\`json.
+`;
+
+  try {
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+
+    const text = result.text || "{}";
+    const cleanedText = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    
+    try {
+      const parsed = JSON.parse(cleanedText);
+      return {
+        sql: parsed.sql || "",
+        error: parsed.error || null,
+        explanation: parsed.explanation || ""
+      };
+    } catch (e) {
+      console.error("Failed to parse JSON response:", text);
+      return {
+        sql: "",
+        error: "ERROR: Failed to generate a valid response from the AI. Please try again.",
+        explanation: ""
+      };
+    }
+  } catch (error) {
+    console.error("AI Generation Error:", error);
+    return {
+      sql: "",
+      error: "ERROR: Something went wrong while connecting to the AI service.",
+      explanation: ""
+    };
+  }
+}
+

@@ -203,6 +203,7 @@ export default function App() {
   const [request, setRequest] = useState("");
   const [dialect, setDialect] = useState("Standard SQL");
   const [result, setResult] = useState("");
+  const [explanation, setExplanation] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,13 +231,15 @@ export default function App() {
     setIsGenerating(true);
     setError(null);
     setResult("");
+    setExplanation("");
 
     try {
       const sqlResult = await generateSQL(dataset, request, dialect);
-      if (sqlResult.startsWith("ERROR:")) {
-        setError(sqlResult.replace(/^ERROR:\s*/i, "").trim());
+      if (sqlResult.error) {
+        setError(sqlResult.error.replace(/^ERROR:\s*/i, "").trim());
       } else {
-        setResult(sqlResult);
+        setResult(sqlResult.sql || "");
+        setExplanation(sqlResult.explanation || "");
       }
     } catch (err) {
       setError("An unexpected error occurred.");
@@ -262,6 +265,7 @@ export default function App() {
     setDataset("");
     setRequest("");
     setResult("");
+    setExplanation("");
     setError(null);
   };
 
@@ -472,7 +476,7 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="bg-slate-900 rounded-2xl p-5 sm:p-8 font-mono text-[13px] leading-relaxed relative overflow-auto shadow-2xl border border-slate-800 flex-1 min-h-[300px] lg:min-h-0">
+              <div className="bg-slate-900 rounded-2xl relative overflow-auto shadow-2xl border border-slate-800 flex-1 min-h-[300px] lg:min-h-0 font-mono text-[13px] leading-relaxed">
                 <AnimatePresence mode="wait">
                   {isGenerating ? (
                     <motion.div
@@ -503,7 +507,7 @@ export default function App() {
                       key="error"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="h-full flex items-center justify-center text-center p-4 sm:p-8 overflow-y-auto"
+                      className="h-full flex items-center justify-center text-center p-4 sm:p-8"
                     >
                       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 sm:p-8 max-w-sm w-full text-left self-center my-auto">
                         <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -520,11 +524,12 @@ export default function App() {
                       key="result"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="h-full"
+                      className="h-full w-full pl-16 py-6 sm:py-8 pr-4 sm:pr-8"
                     >
                       <SyntaxHighlighter
                         language="sql"
                         style={atomOneDark}
+                        wrapLongLines={true}
                         customStyle={{
                           background: 'transparent',
                           padding: 0,
@@ -537,7 +542,7 @@ export default function App() {
                       </SyntaxHighlighter>
                     </motion.div>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-600">
+                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-600 p-8">
                       <div className="w-16 h-16 bg-slate-800/50 rounded-2xl flex items-center justify-center mb-6 border border-slate-700/50">
                         <Terminal className="w-8 h-8 opacity-20" />
                       </div>
@@ -549,7 +554,7 @@ export default function App() {
                 
                 {/* Decorative Line Numbers */}
                 {!isGenerating && !error && result && (
-                  <div className="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-800/50 flex flex-col items-center pt-8 text-[11px] font-mono text-slate-700 select-none bg-slate-900/50">
+                  <div className="absolute left-0 top-0 bottom-0 w-12 border-r border-slate-800/50 flex flex-col items-center pt-6 sm:pt-8 text-[11px] font-mono text-slate-700 select-none bg-slate-900/50">
                     {result.split('\n').map((_, i) => <span key={i} className="leading-[1.8]">{i + 1}</span>)}
                   </div>
                 )}
@@ -557,19 +562,53 @@ export default function App() {
 
               {/* Status Footer */}
               {result && !error && !isGenerating && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-6 p-4 border border-emerald-100 bg-emerald-50 rounded-xl flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <div className="flex flex-col gap-4 mt-6">
+                  {explanation && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-5 border border-blue-100 bg-white rounded-xl shadow-sm"
+                    >
+                      <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Info className="w-3.5 h-3.5 text-blue-500" />
+                        Query Explanation
+                      </h4>
+                      <div className="text-sm text-slate-600 leading-relaxed space-y-2">
+                        {explanation.split('\n').map((line, i) => {
+                           const isBullet = line.trim().startsWith('•');
+                           if (isBullet) {
+                             const content = line.trim().substring(1).trim();
+                             const labelMatch = content.match(/^\*\*([^*]+)\*\*(.*)/);
+                             if (labelMatch) {
+                               return (
+                                 <p key={i} className="flex gap-2">
+                                   <span className="text-blue-500 mt-1 shrink-0">•</span>
+                                   <span><strong className="text-slate-800">{labelMatch[1]}</strong>{labelMatch[2]}</span>
+                                 </p>
+                               );
+                             }
+                             return <p key={i} className="flex gap-2"><span className="text-blue-500 mt-1 shrink-0">•</span><span>{content}</span></p>;
+                           }
+                           return <p key={i}>{line}</p>;
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 border border-emerald-100 bg-emerald-50 rounded-xl flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 rounded-full bg-emerald-200 flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      </div>
+                      <span className="text-[11px] font-bold text-emerald-800">Query validated against provided schema</span>
                     </div>
-                    <span className="text-[11px] font-bold text-emerald-800">Query validated against provided schema</span>
-                  </div>
-                  <span className="text-[9px] text-emerald-600 font-mono font-bold tracking-widest">DIALECT: {dialect.toUpperCase()}</span>
-                </motion.div>
+                    <span className="text-[9px] text-emerald-600 font-mono font-bold tracking-widest">DIALECT: {dialect.toUpperCase()}</span>
+                  </motion.div>
+                </div>
               )}
             </div>
           </div>
