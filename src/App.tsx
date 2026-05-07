@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Send, Copy, Check, Info, Trash2, ArrowRight, Terminal, HelpCircle, X, BookOpen, MessageSquare, Code, Menu } from 'lucide-react';
+import { Database, Send, Copy, Check, Info, Trash2, ArrowRight, Terminal, HelpCircle, X, BookOpen, MessageSquare, Code, Menu, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateSQL } from './lib/gemini.ts';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -249,10 +249,43 @@ export default function App() {
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(result);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = result;
+        textArea.style.position = "absolute";
+        textArea.style.left = "-999999px";
+        document.body.prepend(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+        } catch (error) {
+          console.error(error);
+        } finally {
+          textArea.remove();
+        }
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const handleExport = () => {
+    if (!result) return;
+    const blob = new Blob([result], { type: 'text/sql' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'query.sql';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const loadExample = (ex: typeof EXAMPLES[0]) => {
@@ -472,7 +505,13 @@ export default function App() {
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     {copied ? "Copied" : "Copy"}
                   </button>
-                  <button className="px-3 py-1.5 text-[10px] font-bold bg-slate-200 rounded-md text-slate-600 hover:bg-slate-300 transition-all uppercase tracking-wide">Export</button>
+                  <button 
+                    onClick={handleExport}
+                    className="px-3 py-1.5 text-[10px] font-bold bg-slate-200 rounded-md text-slate-600 hover:bg-slate-300 transition-all uppercase tracking-wide flex items-center gap-1.5"
+                  >
+                    <Download className="w-3 h-3" />
+                    Export
+                  </button>
                 </div>
               </div>
               
