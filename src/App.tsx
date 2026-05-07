@@ -284,7 +284,7 @@ export default function App() {
             <Database className="text-white w-5 h-5" />
           </div>
           <div className="hidden xs:block">
-            <span className="font-bold text-base sm:text-lg tracking-tight">QueryGen <span className="text-blue-600">Expert</span></span>
+            <span className="font-bold text-base sm:text-lg tracking-tight">SQL <span className="text-blue-600">Generator</span></span>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
@@ -617,7 +617,7 @@ export default function App() {
       
       {/* Footer */}
       <footer className="h-10 border-t border-slate-200 bg-white flex items-center justify-between px-4 sm:px-6 shrink-0 z-50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest overflow-hidden">
-        <span className="truncate mr-2">SQL Expert & Data Analyst v2.0</span>
+        <span className="truncate mr-2">SQL Generator v2.0</span>
         <div className="flex gap-2 sm:gap-4 shrink-0">
           <span className="hidden xs:inline">Engine: Gemini-3-Flash</span>
           <span className="text-emerald-500 whitespace-nowrap">● Core Ready</span>
