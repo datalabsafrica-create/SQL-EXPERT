@@ -1,6 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiClient: GoogleGenAI | null = null;
+
+function getAiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is missing. Please add it to your environment variables or Settings panel.");
+    }
+    aiClient = new GoogleGenAI({ apiKey });
+  }
+  return aiClient;
+}
 
 export async function generateSQL(
   datasetDescription: string,
@@ -45,6 +56,7 @@ Respond ONLY with valid JSON. No markdown fences like \`\`\`json.
 `;
 
   try {
+    const ai = getAiClient();
     const result = await ai.models.generateContent({
       model,
       contents: prompt,
@@ -68,11 +80,12 @@ Respond ONLY with valid JSON. No markdown fences like \`\`\`json.
         explanation: ""
       };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Generation Error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong while connecting to the AI service.";
     return {
       sql: "",
-      error: "ERROR: Something went wrong while connecting to the AI service.",
+      error: `ERROR: ${errorMessage}`,
       explanation: ""
     };
   }
