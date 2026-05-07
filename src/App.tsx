@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Database, Send, Copy, Check, Info, Trash2, ArrowRight, Terminal, HelpCircle, X, BookOpen, MessageSquare, Code, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generateSQL } from './lib/gemini.ts';
@@ -210,6 +210,15 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'schema' | 'request'>('schema');
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopValidation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+  };
 
   const handleGenerate = async () => {
     if (!dataset.trim() && !request.trim()) {
@@ -233,8 +242,16 @@ export default function App() {
     setResult("");
     setExplanation("");
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       const sqlResult = await generateSQL(dataset, request, dialect);
+      
+      if (abortController.signal.aborted) {
+        return;
+      }
+      
       if (sqlResult.error) {
         setError(sqlResult.error.replace(/^ERROR:\s*/i, "").trim());
       } else {
@@ -242,10 +259,15 @@ export default function App() {
         setExplanation(sqlResult.explanation || "");
       }
     } catch (err) {
+      if (abortController.signal.aborted) {
+        return;
+      }
       setError("An unexpected error occurred.");
       console.error(err);
     } finally {
-      setIsGenerating(false);
+      if (abortControllerRef.current === abortController) {
+        setIsGenerating(false);
+      }
     }
   };
 
@@ -435,21 +457,18 @@ export default function App() {
               )}
 
               <button
-                disabled={isGenerating}
-                onClick={handleGenerate}
+                onClick={isGenerating ? handleStopValidation : handleGenerate}
                 className={cn(
                   "w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2.5 transition-all shadow-xl",
                   isGenerating 
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed" 
+                    ? "bg-red-500 hover:bg-red-600 text-white shadow-red-200/50 active:scale-[0.98]" 
                     : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200/50 active:scale-[0.98]"
                 )}
               >
                 {isGenerating ? (
                   <>
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                      <Send className="w-4 h-4" />
-                    </motion.div>
-                    Optimising Components...
+                    <X className="w-4 h-4" />
+                    <span>Stop Validation</span>
                   </>
                 ) : (
                   <>
